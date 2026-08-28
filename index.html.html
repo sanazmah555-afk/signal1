@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoPilot AI | سیگنال زنده ارز دیجیتال</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #04070d; color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
+        .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(30, 41, 59, 0.6); }
+        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 md:p-8">
+
+    <div class="max-w-3xl w-full space-y-6">
+        <!-- Header -->
+        <header class="flex items-center justify-between glass rounded-2xl p-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-500/20 rounded-xl">
+                    <i data-lucide="activity" class="w-6 h-6 text-indigo-400"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-white">CryptoPilot AI</h1>
+                    <p class="text-xs text-slate-400">تحلیلگر کوانت زنده (Binance API)</p>
+                </div>
+            </div>
+            <button onclick="fetchData()" id="refresh-btn" class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all text-sm">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                بروزرسانی
+            </button>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loading" class="hidden glass rounded-3xl p-12 text-center">
+            <i data-lucide="loader-2" class="w-10 h-10 text-indigo-400 animate-spin mx-auto mb-4"></i>
+            <p class="text-slate-300">در حال دریافت داده‌های زنده و محاسبه اندیکاتورها...</p>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard" class="space-y-6">
+            <!-- Signal Card -->
+            <div id="signal-card" class="glass rounded-3xl p-6 md:p-8 border-2 transition-all duration-500">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div class="flex items-center gap-4">
+                        <div id="signal-icon" class="p-3 rounded-2xl bg-slate-800"></div>
+                        <div>
+                            <h2 class="text-3xl font-bold text-white">BTC/USDT</h2>
+                            <p id="current-price" class="text-2xl font-mono text-slate-200 mt-1">---</p>
+                        </div>
+                    </div>
+                    <div class="text-center md:text-left">
+                        <div class="text-sm text-slate-400 mb-1">سیگنال هوشمند</div>
+                        <div id="signal-text" class="text-4xl font-black tracking-tight text-slate-500">---</div>
+                        <div class="text-sm mt-2 font-mono text-slate-300">میزان اطمینان: <span id="confidence" class="text-white font-bold">--</span>%</div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 p-4 bg-black/30 rounded-2xl border border-white/5">
+                    <p id="signal-reason" class="text-sm leading-relaxed text-slate-300">🧠 در حال تحلیل...</p>
+                </div>
+            </div>
+
+            <!-- Indicators Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="glass p-5 rounded-2xl">
+                    <div class="text-slate-400 text-sm mb-2 flex items-center gap-2">
+                        <i data-lucide="gauge" class="w-4 h-4"></i> شاخص قدرت نسبی (RSI 14)
+                    </div>
+                    <div id="rsi-value" class="text-2xl font-bold font-mono text-white">--</div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
+                        <div id="rsi-bar" class="h-full bg-indigo-500 transition-all duration-700" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="glass p-5 rounded-2xl">
+                    <div class="text-slate-400 text-sm mb-2 flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4"></i> میانگین متحرک نمایی (EMA 14)
+                    </div>
+                    <div id="ema-value" class="text-2xl font-bold font-mono text-white">--</div>
+                    <div id="ema-diff" class="text-xs text-slate-500 mt-2">--</div>
+                </div>
+            </div>
+
+            <!-- Warning -->
+            <div class="p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-xs text-center flex items-center justify-center gap-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                هشدار: این سیگنال‌ها صرفاً بر اساس تحلیل تکنیکال خودکار تولید می‌شوند و توصیه مالی قطعی نیستند. مدیریت سرمایه را رعایت کنید.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // توابع محاسبه اندیکاتور (ریاضی خالص)
+        function calculateRSI(closes, period = 14) {
+            if (closes.length < period + 1) return 50;
+            let avgGain = 0, avgLoss = 0;
+            for (let i = 1; i <= period; i++) {
+                let change = closes[i] - closes[i - 1];
+                if (change > 0) avgGain += change;
+                else avgLoss += Math.abs(change);
+            }
+            avgGain /= period;
+            avgLoss /= period;
+            
+            for (let i = period + 1; i < closes.length; i++) {
+                let change = closes[i] - closes[i - 1];
+                let gain = change > 0 ? change : 0;
+                let loss = change < 0 ? Math.abs(change) : 0;
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+            }
+            if (avgLoss === 0) return 100;
+            let rs = avgGain / avgLoss;
+            return 100 - (100 / (1 + rs));
+        }
+
+        function calculateEMA(closes, period = 14) {
+            let k = 2 / (period + 1);
+            let ema = closes[0];
+            for (let i = 1; i < closes.length; i++) {
+                ema = closes[i] * k + ema * (1 - k);
+            }
+            return ema;
+        }
+
+        async function fetchData() {
+            const loadingEl = document.getElementById('loading');
+            const dashboardEl = document.getElementById('dashboard');
+            const refreshBtn = document.getElementById('refresh-btn');
+            
+            loadingEl.classList.remove('hidden');
+            dashboardEl.classList.add('hidden');
+            refreshBtn.disabled = true;
+
+            try {
+                // دریافت 50 کندل آخر از API عمومی بایننس (تایم فریم 1 ساعته)
+                const res = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=50');
+                const data = await res.json();
+                const closes = data.map(c => parseFloat(c[4]));
+                const currentPrice = closes[closes.length - 1];
+                
+                const rsi = calculateRSI(closes, 14);
+                const ema = calculateEMA(closes, 14);
+                
+                // منطق سیگنال‌دهی
+                let signal = "NEUTRAL", reason = "بازار در حالت تعادل یا رنج است. صبر کنید.", confidence = 50;
+                let cardClass = "border-yellow-500/30 bg-yellow-500/5";
+                let iconHtml = '<i data-lucide="minus" class="w-8 h-8 text-yellow-400"></i>';
+                let signalColor = "text-yellow-400";
+
+                if (currentPrice > ema && rsi < 35) {
+                    signal = "BUY"; 
+                    reason = "✅ قیمت بالای خط روند (EMA) است و RSI در منطقه اشباع فروش (زیر 35) قرار دارد. احتمال قوی برای برگشت روند به بالا."; 
+                    confidence = 85;
+                    cardClass = "border-emerald-500/40 bg-emerald-500/10";
+                    iconHtml = '<i data-lucide="trending-up" class="w-8 h-8 text-emerald-400"></i>';
+                    signalColor = "text-emerald-400";
+                } else if (currentPrice < ema && rsi > 65) {
+                    signal = "SELL"; 
+                    reason = "❌ قیمت زیر خط روند (EMA) است و RSI در منطقه اشباع خرید (بالای 65) قرار دارد. احتمال اصلاح و ریزش قیمت."; 
+                    confidence = 80;
+                    cardClass = "border-rose-500/40 bg-rose-500/10";
+                    iconHtml = '<i data-lucide="trending-down" class="w-8 h-8 text-rose-400"></i>';
+                    signalColor = "text-rose-400";
+                } else if (currentPrice > ema && rsi > 50) {
+                    signal = "HOLD"; 
+                    reason = "⚠️ روند کلی صعودی است، اما RSI اشباع نشده. اگر پوزیشن دارید نگه دارید، برای ورود جدید صبر کنید."; 
+                    confidence = 70;
+                    cardClass = "border-blue-500/30 bg-blue-500/5";
+                    iconHtml = '<i data-lucide="pause" class="w-8 h-8 text-blue-400"></i>';
+                    signalColor = "text-blue-400";
+                }
+
+                // بروزرسانی UI
+                document.getElementById('current-price').innerText = `$${currentPrice.toLocaleString()}`;
+                document.getElementById('rsi-value').innerText = rsi.toFixed(2);
+                document.getElementById('rsi-bar').style.width = `${Math.min(rsi, 100)}%`;
+                document.getElementById('rsi-bar').className = `h-full transition-all duration-700 ${rsi > 70 ? 'bg-rose-500' : rsi < 30 ? 'bg-emerald-500' : 'bg-indigo-500'}`;
+                
+                document.getElementById('ema-value').innerText = `$${ema.toLocaleString(undefined, {maximumFractionDigits: 2})}`;
+                const diff = ((currentPrice - ema) / ema * 100).toFixed(2);
+                document.getElementById('ema-diff').innerText = `فاصله قیمت از EMA: ${diff > 0 ? '+' : ''}${diff}%`;
+
+                document.getElementById('signal-text').innerText = signal;
+                document.getElementById('signal-text').className = `text-4xl font-black tracking-tight ${signalColor}`;
+                document.getElementById('confidence').innerText = confidence;
+                document.getElementById('signal-reason').innerText = `🧠 تحلیل موتور: ${reason}`;
+                
+                const signalCard = document.getElementById('signal-card');
+                signalCard.className = `glass rounded-3xl p-6 md:p-8 border-2 transition-all duration-500 ${cardClass}`;
+                document.getElementById('signal-icon').innerHTML = iconHtml;
+
+                lucide.createIcons();
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('signal-reason').innerText = "❌ خطا در برقراری ارتباط با سرور بایننس. لطفاً دوباره تلاش کنید.";
+            } finally {
+                loadingEl.classList.add('hidden');
+                dashboardEl.classList.remove('hidden');
+                refreshBtn.disabled = false;
+            }
+        }
+
+        // اجرای اولیه
+        fetchData();
+        // بروزرسانی خودکار هر 60 ثانیه
+        setInterval(fetchData, 60000);
+    </script>
+</body>
+</html>
